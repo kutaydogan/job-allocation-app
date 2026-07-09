@@ -1,85 +1,75 @@
-# Job Allocation App (lokaler MVP)
+# Job Allocation App
 
-Lokaler End-to-End-MVP für Supervisoren mit Next.js Frontend, FastAPI Backend, SQLite-Speicherung und Excel-Export. Die App nutzt eine Dummy-Allocation-Engine, die später durch eine echte Python Allocation Engine ersetzt werden kann.
+Lokaler MVP zur fachlichen Vorbereitung des späteren Job-Allocation-Workflows. Die echte `job-allocation-engine` wird **nicht** angebunden; alle Berechnungen laufen über klar gekennzeichnete Dummy-Logik.
 
-## Projektstruktur
+## Architektur
 
-```text
-frontend/                 Next.js, TypeScript, Tailwind CSS, shadcn/ui-inspirierte Komponenten
-backend/                  FastAPI Backend
-backend/app/api/          REST-Endpunkte
-backend/app/services/     SQLite-, Excel- und Allocation-Services
-backend/app/parsers/      Parser für Copy-&-Paste-Aisle-/Volumendaten
-backend/app/engine/       Austauschbare Allocation Engine
-backend/data/             Lokale SQLite-Datenbank
-backend/outputs/          Lokal gespeicherte Excel-Exports
-```
+- Frontend: Next.js, TypeScript, Tailwind CSS
+- Backend: FastAPI, Pydantic, Python
+- Persistenz: SQLite unter `backend/data/allocation.db`
+- Export: Excel-Dateien unter `backend/outputs/`
+- Kommunikation: REST API unter `/api/*`
 
-## Voraussetzungen
+## Start unter Windows PowerShell
 
-- Node.js 18 oder neuer
-- Python 3.11 oder neuer
-
-## Backend starten
-
-```bash
+```powershell
+cd job-allocation-app
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r backend\requirements.txt
 cd backend
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\\Scripts\\activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload
 ```
-
-Das Backend läuft dann unter <http://localhost:8000>.
-
-## Frontend starten
 
 In einem zweiten Terminal:
 
-```bash
-cd frontend
+```powershell
+cd job-allocation-app\frontend
 npm install
 npm run dev
 ```
 
-Das Frontend läuft dann unter <http://localhost:3000>.
+Dann `http://localhost:3000` öffnen. Das Frontend erwartet standardmäßig `http://localhost:8000/api`.
 
-## MVP-Flow
+## Neuer User Flow
 
-1. Schichtdatum auswählen.
-2. Optional Mitarbeiter-/Skill-Matrix als Excel-Datei hochladen.
-3. Anwesenheit, Build Time, Rates und Volumen bearbeiten.
-4. Rohe Aisle-/Volumendaten in das große Textfeld einfügen.
-5. Vorschau prüfen.
-6. **Allocation berechnen** klicken.
-7. Ergebnis prüfen, lokal in SQLite speichern und Excel-Datei herunterladen.
-8. Jede Excel-Datei wird zusätzlich in `backend/outputs/` gespeichert.
+1. Schichtdatum auswählen und simulierte Vortagsdaten prüfen.
+2. Employee IDs gesammelt per Copy & Paste einfügen.
+3. Mitarbeiter gegen Dummy-Stammdaten erkennen.
+4. SD- und ND-Rohdaten getrennt einfügen und Aisle/Volumen-Paare parsen.
+5. Operative Rates und Parameter prüfen oder schichtspezifisch ändern.
+6. Eingaben vorvalidieren.
+7. Rollenbedarf berechnen.
+8. Zulässige Cluster-Anzahlen anpassen und Rollenplan validieren.
+9. Finale Dummy-Allocation berechnen.
+10. Ergebnis prüfen, finalisieren, SQLite-Historie schreiben und Excel exportieren.
 
-## Erwartetes Excel-Format für Uploads
+## API-Endpunkte
 
-Der Upload ist bewusst tolerant. Empfohlene Spalten:
+- `GET /api/health`
+- `POST /api/employees/resolve`
+- `POST /api/volumes/parse`
+- `GET /api/config/rates`
+- `POST /api/validation/pre-run`
+- `POST /api/role-plan/calculate`
+- `POST /api/role-plan/validate`
+- `POST /api/allocation/final`
+- `POST /api/allocation/finalize`
+- `GET /api/allocations`
+- `GET /api/exports/{filename}`
+- `POST /api/employees/upload` als Admin-/Fallback-Funktion
 
-| name | skills | present |
-| --- | --- | --- |
-| Alex Morgan | Pick, Pack | true |
-| Sam Rivera | Rebin | true |
+## Dummy-Daten
 
-- `name` ist erforderlich.
-- `skills` kann kommasepariert sein.
-- `present` akzeptiert z. B. `true`, `false`, `1`, `0`, `yes`, `no`.
+Das Backend erzeugt lokale Dummy-Mitarbeiter, Skills, New-Hire-/L3-Marker, operative Rates, Vortagsstatus, Rollenplan-Verfügbarkeiten und finale Zuweisungen. Die Daten sind austauschbar angelegt und ersetzen keine echten Stammdaten.
 
-## Copy-&-Paste Parser
+## Bekannte Einschränkungen
 
-Der Parser erkennt einfache Zeilen wie:
+- Keine echte Solver- oder Engine-Optimierung.
+- Volume-Parser ist bewusst modular und nutzt eine robuste MVP-Heuristik: Aisle-Code plus nachfolgende Zahl.
+- Keine Authentifizierung und kein Deployment.
+- Vortagsdaten sind derzeit simuliert.
 
-```text
-Aisle A01 1200
-B02: 850
-Finger F3 - 640
-```
+## Spätere Engine-Integration
 
-Er extrahiert die Aisle-/Finger-Bezeichnung und das letzte Zahlenvolumen der Zeile.
-
-## Dummy Allocation Engine ersetzen
-
-Die austauschbare Engine liegt in `backend/app/engine/dummy_engine.py`. Eine echte Engine kann später über `backend/app/services/allocation_service.py` angebunden werden, solange sie dieselbe Ergebnisstruktur liefert.
+Der Integrationspunkt liegt im Backend in `backend/app/engine/dummy_engine.py`. Später kann dort ein Adapter zur echten Engine die Modelle `DailyInput`, `RolePlan` und `AllocationResult` übersetzen, ohne den UI-Workflow grundsätzlich zu ändern.

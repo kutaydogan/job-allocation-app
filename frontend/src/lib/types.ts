@@ -1,0 +1,15 @@
+export type Employee={employee_id:string;name:string;badge_id:string;user_id:string;skills:string[];notes:string[];new_hire:boolean;l3:boolean;present:boolean;allocatable:boolean;status:'found'|'unknown'};
+export type EmployeeResolutionResponse={total_ids:number;found_count:number;unknown_ids:string[];duplicate_ids:string[];employees:Employee[]};
+export type AisleVolume={finger:string;aisle:string;sd_volume:number;nd_volume:number;total_volume:number};
+export type VolumeParseResponse={aisles:AisleVolume[];sd_total:number;nd_total:number;total_volume:number;aisle_count:number;active_fingers:string[];warnings:string[]};
+export type OperationalRate={key:string;name:string;default_value:number;current_value:number;unit:string};
+export type DailyInput={shift_date:string;employees:Employee[];volumes:AisleVolume[];rates:OperationalRate[];previous_day_found:boolean};
+export type ValidationIssue={severity:'error'|'warning'|'info'|'success';message:string;field?:string};
+export type ValidationResult={is_valid:boolean;error_count:number;warning_count:number;issues:ValidationIssue[]};
+export type RolePlanItem={engine_cluster:string;suggested_count:number;current_count:number;minimum_count:number;maximum_count?:number;mandatory:boolean;editable:boolean|'restricted';type:string;available_skilled_employees:number;warnings:string[]};
+export type RolePlan={target_positions:number;current_positions:number;items:RolePlanItem[];warnings:string[]};
+export type RolePlanValidation={is_valid:boolean;target_positions:number;current_positions:number;issues:ValidationIssue[]};
+export type AllocationAssignment={employee_id:string;badge_id:string;name:string;user_id:string;role:string;engine_cluster:string;fclm_cluster:string;finger?:string;primary_aisles:string[];primary_volume:number;load_percent:number;support_target?:string;support_aisles:string[];internal_note:string;status:string};
+export type AllocationResult={run_status:string;kpis:Record<string,number|string>;assignments:AllocationAssignment[];warnings:string[];open_mandatory_roles:string[];open_optional_roles:string[];standby_employees:Employee[];aisle_utilization:Record<string,unknown>[];support_assignments:Record<string,unknown>[]};
+export type FinalizationResult={run_id:number;status:string;export_filename:string;message:string};
+export type AllocationHistoryEntry={run_id:number;shift_date:string;status:string;assigned_count:number;total_volume:number;export_filename:string;created_at:string};

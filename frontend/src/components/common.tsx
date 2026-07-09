@@ -1,0 +1,4 @@
+import { ReactNode } from 'react';
+export function StatusBadge({type,children}:{type:'success'|'warning'|'error'|'info',children:ReactNode}){const c={success:'bg-emerald-100 text-emerald-800',warning:'bg-amber-100 text-amber-800',error:'bg-red-100 text-red-800',info:'bg-blue-100 text-blue-800'}[type];return <span className={`rounded-full px-2 py-1 text-xs font-semibold ${c}`}>{children}</span>}
+export function KPIBox({label,value}:{label:string;value:ReactNode}){return <div className="rounded-2xl border bg-slate-50 p-4"><p className="text-xs uppercase tracking-wide text-slate-500">{label}</p><p className="mt-1 text-2xl font-bold text-slate-900">{value}</p></div>}
+export function DataTable({children}:{children:ReactNode}){return <div className="overflow-x-auto rounded-xl border"><table className="w-full text-left text-sm">{children}</table></div>}

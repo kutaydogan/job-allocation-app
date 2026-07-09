@@ -1,80 +1,35 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, Card, Input, Textarea } from '@/components/ui';
-
-type Employee = { id: string; name: string; skills: string[]; present: boolean };
-type AisleVolume = { aisle: string; volume: number };
-type Result = { employee_name: string; role: string; aisle: string; volume: number; utilization: number; warnings: string[] };
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api';
-const starterEmployees: Employee[] = [
-  { id: 'emp-1', name: 'Alex Morgan', skills: ['Pick'], present: true },
-  { id: 'emp-2', name: 'Sam Rivera', skills: ['Pack', 'Rebin'], present: true },
-  { id: 'emp-3', name: 'Taylor Chen', skills: ['Stow'], present: false },
-];
-
-export default function Home() {
-  const [shiftDate, setShiftDate] = useState(new Date().toISOString().slice(0, 10));
-  const [employees, setEmployees] = useState<Employee[]>(starterEmployees);
-  const [buildTimeHours, setBuildTimeHours] = useState(7.5);
-  const [ratePerHour, setRatePerHour] = useState(120);
-  const [targetVolume, setTargetVolume] = useState(2400);
-  const [rawText, setRawText] = useState('Aisle A01 1200\nB02: 850\nFinger F3 - 640');
-  const [preview, setPreview] = useState<AisleVolume[]>([]);
-  const [results, setResults] = useState<Result[]>([]);
-  const [exportFile, setExportFile] = useState('');
-  const presentCount = useMemo(() => employees.filter((employee) => employee.present).length, [employees]);
-
-  async function parseRows() {
-    const items = await parseRawRows();
-    setPreview(items);
-  }
-
-  async function parseRawRows(): Promise<AisleVolume[]> {
-    const response = await fetch(`${API}/parse-aisles`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ raw_text: rawText }) });
-    const data = await response.json();
-    return data.items ?? [];
-  }
-
-  async function uploadEmployees(file?: File) {
-    if (!file) return;
-    const body = new FormData();
-    body.append('file', file);
-    const response = await fetch(`${API}/employees/upload`, { method: 'POST', body });
-    const data = await response.json();
-    setEmployees(data.employees);
-  }
-
-  async function calculate() {
-    const aisle_volumes = preview.length ? preview : await parseRawRows();
-    if (!preview.length) setPreview(aisle_volumes);
-    const response = await fetch(`${API}/allocations`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ shift_date: shiftDate, build_time_hours: buildTimeHours, rate_per_hour: ratePerHour, target_volume: targetVolume, employees, aisle_volumes }),
-    });
-    const data = await response.json();
-    setResults(data.results ?? []);
-    setExportFile(data.export_filename ?? '');
-  }
-
-  return <main className="mx-auto max-w-7xl space-y-6 p-6">
-    <section className="rounded-3xl bg-gradient-to-r from-blue-700 to-indigo-600 p-8 text-white shadow-lg">
-      <p className="text-sm uppercase tracking-widest opacity-80">Lokaler MVP</p>
-      <h1 className="mt-2 text-4xl font-bold">Job Allocation Dashboard</h1>
-      <p className="mt-3 max-w-3xl text-blue-100">Tagesdaten erfassen, Aisle-Volumen parsen, Allocation berechnen, lokal speichern und als Excel exportieren.</p>
-    </section>
-    <section className="grid gap-4 md:grid-cols-4">
-      <Card><p className="text-sm text-slate-500">Schichtdatum</p><Input type="date" value={shiftDate} onChange={(event) => setShiftDate(event.target.value)} /></Card>
-      <Card><p className="text-sm text-slate-500">Anwesend</p><p className="text-3xl font-bold">{presentCount}/{employees.length}</p></Card>
-      <Card><p className="text-sm text-slate-500">Zielvolumen</p><Input type="number" value={targetVolume} onChange={(event) => setTargetVolume(Number(event.target.value))} /></Card>
-      <Card><p className="text-sm text-slate-500">Kapazität</p><p className="text-3xl font-bold">{Math.round(buildTimeHours * ratePerHour * Math.max(presentCount, 1))}</p></Card>
-    </section>
-    <section className="grid gap-6 lg:grid-cols-2">
-      <Card><h2 className="text-xl font-semibold">Mitarbeiter & Skills</h2><Input className="mt-4" type="file" accept=".xlsx" onChange={(event) => uploadEmployees(event.target.files?.[0])} />
-        <div className="mt-4 space-y-2">{employees.map((employee, index) => <label key={employee.id} className="flex items-center gap-3 rounded-xl border p-3"><input type="checkbox" checked={employee.present} onChange={(event) => setEmployees((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, present: event.target.checked } : item))} /><span className="font-medium">{employee.name}</span><span className="text-sm text-slate-500">{employee.skills.join(', ') || 'keine Skills'}</span></label>)}</div></Card>
-      <Card><h2 className="text-xl font-semibold">Build Time & Rates</h2><div className="mt-4 grid gap-3"><label>Build Time (h)<Input type="number" step="0.25" value={buildTimeHours} onChange={(e) => setBuildTimeHours(Number(e.target.value))} /></label><label>Rate pro Stunde<Input type="number" value={ratePerHour} onChange={(e) => setRatePerHour(Number(e.target.value))} /></label></div></Card>
-    </section>
-    <Card><h2 className="text-xl font-semibold">Aisle-/Volumendaten einfügen</h2><Textarea rows={8} value={rawText} onChange={(event) => setRawText(event.target.value)} /><Button className="mt-3" onClick={parseRows}>Parser-Vorschau erzeugen</Button></Card>
-    <Card><h2 className="text-xl font-semibold">Vorschau & Berechnung</h2><div className="mt-3 grid gap-2 md:grid-cols-3">{preview.map((item) => <div key={item.aisle} className="rounded-xl bg-slate-100 p-3"><b>{item.aisle}</b><p>{item.volume} Units</p></div>)}</div><Button className="mt-4" onClick={calculate}>Allocation berechnen</Button></Card>
-    {results.length > 0 && <Card><div className="flex items-center justify-between"><h2 className="text-xl font-semibold">Ergebnis</h2>{exportFile && <a className="font-semibold text-blue-700" href={`${API}/exports/${exportFile}`}>Excel herunterladen</a>}</div><div className="mt-4 overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b"><th>Mitarbeiter</th><th>Rolle</th><th>Aisle/Finger</th><th>Volumen</th><th>Auslastung</th><th>Warnungen</th></tr></thead><tbody>{results.map((result, index) => <tr key={`${result.aisle}-${index}`} className="border-b"><td>{result.employee_name}</td><td>{result.role}</td><td>{result.aisle}</td><td>{result.volume}</td><td>{Math.round(result.utilization * 100)}%</td><td>{result.warnings.join(', ') || 'OK'}</td></tr>)}</tbody></table></div></Card>}
-  </main>;
-}
+import { DataTable, KPIBox, StatusBadge } from '@/components/common';
+import { api, API } from '@/lib/api';
+import type { AllocationHistoryEntry, AllocationResult, DailyInput, EmployeeResolutionResponse, OperationalRate, RolePlan, RolePlanValidation, ValidationResult, VolumeParseResponse } from '@/lib/types';
+const sampleIds='123456001\n123456002\n123456003\n123456004\n123456005\n123456006\n123456007\n123456008\n123456009\n123456010\n123456011\n123456012\n123456013\n123456014\n123456015\n123456016\n123456001\n999999999';
+const sampleSd='A01 volume 1200\nA02 850\nB01 1140\nB15 980\nC01 950\nnoise text';
+const sampleNd='A01 300\nA02 200\nB01 260\nC01 100';
+export default function Home(){
+ const [shiftDate,setShiftDate]=useState('2026-07-10'); const [rawIds,setRawIds]=useState(sampleIds); const [emp,setEmp]=useState<EmployeeResolutionResponse|null>(null);
+ const [sd,setSd]=useState(sampleSd); const [nd,setNd]=useState(sampleNd); const [vol,setVol]=useState<VolumeParseResponse|null>(null); const [rates,setRates]=useState<OperationalRate[]>([]);
+ const [validation,setValidation]=useState<ValidationResult|null>(null); const [rolePlan,setRolePlan]=useState<RolePlan|null>(null); const [roleVal,setRoleVal]=useState<RolePlanValidation|null>(null); const [alloc,setAlloc]=useState<AllocationResult|null>(null); const [finalFile,setFinalFile]=useState(''); const [history,setHistory]=useState<AllocationHistoryEntry[]>([]); const [error,setError]=useState(''); const [loading,setLoading]=useState(''); const [details,setDetails]=useState(false);
+ useEffect(()=>{api<OperationalRate[]>('/config/rates').then(setRates).catch(e=>setError(e.message)); loadHistory()},[]);
+ const daily:DailyInput={shift_date:shiftDate,employees:emp?.employees??[],volumes:vol?.aisles??[],rates,previous_day_found:true};
+ const canFinal=roleVal?.is_valid && rolePlan;
+ async function run<T>(label:string,fn:()=>Promise<T>){setError('');setLoading(label);try{return await fn()}catch(e){setError(e instanceof Error?e.message:'Unbekannter Fehler')}finally{setLoading('')}}
+ const loadHistory=()=>api<AllocationHistoryEntry[]>('/allocations').then(setHistory).catch(()=>{});
+ const resolve=()=>run('Mitarbeiter werden erkannt',async()=>setEmp(await api('/employees/resolve',{method:'POST',body:JSON.stringify({raw_employee_ids:rawIds})})));
+ const parseVol=()=>run('Volumen werden geparst',async()=>setVol(await api('/volumes/parse',{method:'POST',body:JSON.stringify({sd_raw_text:sd,nd_raw_text:nd})})));
+ const validate=()=>run('Validierung läuft',async()=>setValidation(await api('/validation/pre-run',{method:'POST',body:JSON.stringify(daily)})));
+ const calcRole=()=>run('Rollenbedarf wird berechnet',async()=>{const rp=await api<RolePlan>('/role-plan/calculate',{method:'POST',body:JSON.stringify(daily)});setRolePlan(rp);setRoleVal(await api('/role-plan/validate',{method:'POST',body:JSON.stringify(rp)}))});
+ async function updateRole(i:number,n:number){if(!rolePlan)return; const rp={...rolePlan,items:rolePlan.items.map((it,idx)=>idx===i?{...it,current_count:n}:it)}; rp.current_positions=rp.items.reduce((s,it)=>s+it.current_count,0); setRolePlan(rp); setRoleVal(await api('/role-plan/validate',{method:'POST',body:JSON.stringify(rp)}));}
+ const finalAlloc=()=>run('Finale Allocation',async()=>setAlloc(await api('/allocation/final',{method:'POST',body:JSON.stringify({daily_input:daily,role_plan:rolePlan})})));
+ const finalize=()=>run('Finalisierung',async()=>{const res=await api<{export_filename:string}>('/allocation/finalize',{method:'POST',body:JSON.stringify({daily_input:daily,role_plan:rolePlan,allocation_result:alloc})});setFinalFile(res.export_filename); await loadHistory();});
+ return <main className="mx-auto max-w-7xl space-y-6 p-6 text-slate-900"><section className="rounded-3xl bg-gradient-to-r from-slate-900 to-blue-700 p-8 text-white"><p className="text-sm uppercase tracking-widest opacity-80">Lokaler Dummy-MVP</p><h1 className="mt-2 text-4xl font-bold">Job Allocation Workflow</h1><p className="mt-3 max-w-3xl text-blue-100">Geführter End-to-End-Flow: Schicht, Employee IDs, SD/ND-Volumen, Rates, Validierung, Rollenplan, finale Dummy-Allocation, Historie und Excel.</p></section>{error&&<Card className="border-red-200 bg-red-50"><b>Fehler:</b> {error}</Card>}{loading&&<Card className="border-blue-200 bg-blue-50">{loading} …</Card>}
+ <Card><h2 className="text-xl font-semibold">1. Schicht</h2><div className="mt-4 grid gap-4 md:grid-cols-3"><label>Schichtdatum<Input type="date" value={shiftDate} onChange={e=>setShiftDate(e.target.value)}/></label><KPIBox label="Vortagsdaten" value="✓ gefunden"/><KPIBox label="Frühere finale Allocation" value="28 Zuweisungen"/></div></Card>
+ <Card><h2 className="text-xl font-semibold">2. Mitarbeiter</h2><Textarea rows={7} value={rawIds} onChange={e=>setRawIds(e.target.value)} /><Button className="mt-3" onClick={resolve}>Mitarbeiter erkennen</Button>{emp&&<><div className="mt-4 grid gap-3 md:grid-cols-4"><KPIBox label="IDs erkannt" value={emp.total_ids}/><KPIBox label="Gefunden" value={emp.found_count}/><KPIBox label="Unbekannt" value={emp.unknown_ids.length}/><KPIBox label="Duplikate" value={emp.duplicate_ids.length}/></div><DataTable><thead><tr><th>Status</th><th>Employee ID</th><th>Name</th><th>Badge</th><th>User</th><th>Hinweise</th><th>New Hire</th><th>L3</th><th>Anwesend</th></tr></thead><tbody>{emp.employees.map(e=><tr className="border-t" key={e.employee_id}><td><StatusBadge type={e.status==='found'?'success':'warning'}>{e.status}</StatusBadge></td><td>{e.employee_id}</td><td>{e.name}</td><td>{e.badge_id}</td><td>{e.user_id}</td><td>{e.notes.join(', ')}</td><td>{e.new_hire?'Ja':'Nein'}</td><td>{e.l3?'Ja':'Nein'}</td><td>{e.present?'Ja':'Nein'}</td></tr>)}</tbody></DataTable></>}</Card>
+ <Card><h2 className="text-xl font-semibold">3. Volumen</h2><div className="grid gap-4 md:grid-cols-2"><label>SD-Volumendaten einfügen<Textarea rows={7} value={sd} onChange={e=>setSd(e.target.value)}/></label><label>ND-Volumendaten einfügen<Textarea rows={7} value={nd} onChange={e=>setNd(e.target.value)}/></label></div><Button className="mt-3" onClick={parseVol}>Volumen parsen</Button>{vol&&<><div className="mt-4 grid gap-3 md:grid-cols-5"><KPIBox label="SD" value={vol.sd_total}/><KPIBox label="ND" value={vol.nd_total}/><KPIBox label="Total" value={vol.total_volume}/><KPIBox label="Aisles" value={vol.aisle_count}/><KPIBox label="Finger" value={vol.active_fingers.join(', ')}/></div><DataTable><thead><tr><th>Finger</th><th>Aisle</th><th>SD Volume</th><th>ND Volume</th><th>Total</th></tr></thead><tbody>{vol.aisles.map(a=><tr className="border-t" key={a.aisle}><td>{a.finger}</td><td>{a.aisle}</td><td>{a.sd_volume}</td><td>{a.nd_volume}</td><td>{a.total_volume}</td></tr>)}</tbody></DataTable></>}</Card>
+ <Card><h2 className="text-xl font-semibold">4. Operative Rates & Parameter</h2><DataTable><thead><tr><th>Parameter</th><th>Standardwert</th><th>Aktueller Wert</th><th>Einheit</th></tr></thead><tbody>{rates.map((r,i)=><tr className="border-t" key={r.key}><td>{r.name}</td><td>{r.default_value}</td><td><Input type="number" value={r.current_value} onChange={e=>setRates(rs=>rs.map((x,ix)=>ix===i?{...x,current_value:Number(e.target.value)}:x))}/></td><td>{r.unit}</td></tr>)}</tbody></DataTable></Card>
+ <Card><h2 className="text-xl font-semibold">5. Validierung</h2><Button onClick={validate}>Eingaben validieren</Button>{validation&&<div className="mt-4 space-y-2">{validation.issues.map((i,idx)=><p key={idx}><StatusBadge type={i.severity==='error'?'error':i.severity==='warning'?'warning':i.severity==='success'?'success':'info'}>{i.severity}</StatusBadge> <span className="ml-2">{i.message}</span></p>)}<b>{validation.error_count} Fehler, {validation.warning_count} Hinweise</b></div>}</Card>
+ <Card><h2 className="text-xl font-semibold">6. Rollenplan</h2><Button disabled={validation?.is_valid===false} onClick={calcRole}>Rollenbedarf berechnen</Button>{rolePlan&&<><div className="my-3"><b>Soll: {rolePlan.target_positions} Positionen · Aktuell: {roleVal?.current_positions}</b> {roleVal?.is_valid?<StatusBadge type="success">Summe korrekt</StatusBadge>:<StatusBadge type="error">ungültig</StatusBadge>}</div><DataTable><thead><tr><th>Engine Cluster</th><th>Vorgeschlagen</th><th>Aktuell</th><th>Typ</th><th>Änderbar</th><th>Skilled</th><th>Warnungen</th></tr></thead><tbody>{rolePlan.items.map((i,idx)=><tr className="border-t" key={i.engine_cluster}><td>{i.engine_cluster}</td><td>{i.suggested_count}</td><td><Input disabled={!i.editable} type="number" value={i.current_count} onChange={e=>updateRole(idx,Number(e.target.value))}/></td><td>{i.type}</td><td>{String(i.editable)}</td><td>{i.available_skilled_employees}</td><td>{i.warnings.join(', ')}</td></tr>)}</tbody></DataTable>{roleVal?.issues.map((i,idx)=><p className="mt-2 text-red-700" key={idx}>✕ {i.message}</p>)}</>}</Card>
+ <Card><h2 className="text-xl font-semibold">7. Finale Allocation</h2><Button disabled={!canFinal} onClick={finalAlloc}>Finale Allocation berechnen</Button>{alloc&&<><div className="mt-4 grid gap-3 md:grid-cols-5">{Object.entries(alloc.kpis).map(([k,v])=><KPIBox key={k} label={k} value={v}/>)}</div><Button className="my-3 bg-slate-700" onClick={()=>setDetails(!details)}>Details anzeigen</Button><DataTable><thead><tr><th>Employee ID</th><th>Badge</th><th>Name</th><th>User</th><th>Rolle</th>{details&&<><th>Engine Cluster</th><th>FCLM</th></>}<th>Finger</th><th>Aisles</th><th>Volume</th><th>Load %</th><th>Status</th></tr></thead><tbody>{alloc.assignments.map(a=><tr className="border-t" key={a.employee_id}><td>{a.employee_id}</td><td>{a.badge_id}</td><td>{a.name}</td><td>{a.user_id}</td><td>{a.role}</td>{details&&<><td>{a.engine_cluster}</td><td>{a.fclm_cluster}</td></>}<td>{a.finger}</td><td>{a.primary_aisles.join(', ')}</td><td>{a.primary_volume}</td><td>{a.load_percent}</td><td>{a.status}</td></tr>)}</tbody></DataTable><p className="mt-3"><b>Warnungen:</b> {alloc.warnings.join(', ')||'Keine'}</p><p><b>Standby:</b> {alloc.standby_employees.map(e=>e.name).join(', ')||'Keine'}</p></>}</Card>
+ <Card><h2 className="text-xl font-semibold">8. Finalisieren & Export</h2><Button disabled={!alloc} onClick={finalize}>Allocation finalisieren</Button>{finalFile&&<p className="mt-3"><StatusBadge type="success">Allocation erfolgreich finalisiert</StatusBadge> <a className="ml-3 font-semibold text-blue-700" href={`${API}/exports/${finalFile}`}>Excel herunterladen</a></p>}</Card><HistoryView history={history}/></main>}
+function HistoryView({history}:{history:AllocationHistoryEntry[]}){return <Card><h2 className="text-xl font-semibold">Historie</h2>{history.length===0?<p className="mt-3 text-slate-500">Noch keine finalisierte Allocation.</p>:<DataTable><thead><tr><th>Datum</th><th>Run-ID</th><th>Status</th><th>Zugewiesen</th><th>Gesamtvolumen</th><th>Export-Datei</th></tr></thead><tbody>{history.map(h=><tr className="border-t" key={h.run_id}><td>{h.shift_date}</td><td>{h.run_id}</td><td>{h.status}</td><td>{h.assigned_count}</td><td>{h.total_volume}</td><td><a className="text-blue-700" href={`${API}/exports/${h.export_filename}`}>{h.export_filename}</a></td></tr>)}</tbody></DataTable>}</Card>}

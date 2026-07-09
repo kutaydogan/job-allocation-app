@@ -1,45 +1,22 @@
 from pathlib import Path
 from uuid import uuid4
 from openpyxl import Workbook, load_workbook
-from app.models import AllocationInput, AllocationResult, Employee
-
-OUTPUT_DIR = Path(__file__).resolve().parents[2] / "outputs"
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-
-def export_allocation(payload: AllocationInput, results: list[AllocationResult]) -> str:
-    filename = f"allocation_{payload.shift_date}_{uuid4().hex[:8]}.xlsx"
-    path = OUTPUT_DIR / filename
-    workbook = Workbook()
-    sheet = workbook.active
-    sheet.title = "Allocation"
-    sheet.append(["Schichtdatum", payload.shift_date])
-    sheet.append([])
-    sheet.append(["Mitarbeiter", "Rolle", "Aisle/Finger", "Volumen", "Auslastung", "Warnungen"])
-    for result in results:
-        sheet.append([
-            result.employee_name,
-            result.role,
-            result.aisle,
-            result.volume,
-            result.utilization,
-            ", ".join(result.warnings),
-        ])
-    workbook.save(path)
-    return filename
-
+from app.models import Employee, FinalizationRequest
+OUTPUT_DIR = Path(__file__).resolve().parents[2] / 'outputs'; OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+def export_finalization(req: FinalizationRequest) -> str:
+    filename=f"allocation_{req.daily_input.shift_date}_{uuid4().hex[:8]}.xlsx"; path=OUTPUT_DIR/filename
+    wb=Workbook(); ws=wb.active; ws.title='Final Allocation'
+    ws.append(['Schichtdatum',req.daily_input.shift_date]); ws.append(['Status',req.allocation_result.run_status]); ws.append([])
+    ws.append(['Employee ID','Badge ID','Name','User ID','Rolle','Engine Cluster','FCLM Cluster','Finger','Primary Aisles','Primary Volume','Load %','Support Target','Support Aisles','Internal Note','Status'])
+    for a in req.allocation_result.assignments: ws.append([a.employee_id,a.badge_id,a.name,a.user_id,a.role,a.engine_cluster,a.fclm_cluster,a.finger,', '.join(a.primary_aisles),a.primary_volume,a.load_percent,a.support_target,', '.join(a.support_aisles),a.internal_note,a.status])
+    rp=wb.create_sheet('Role Plan'); rp.append(['Engine Cluster','Suggested','Current','Min','Max','Mandatory','Editable','Type','Available Skilled','Warnings'])
+    for i in req.role_plan.items: rp.append([i.engine_cluster,i.suggested_count,i.current_count,i.minimum_count,i.maximum_count,i.mandatory,str(i.editable),i.type,i.available_skilled_employees,', '.join(i.warnings)])
+    vol=wb.create_sheet('Volumes'); vol.append(['Finger','Aisle','SD Volume','ND Volume','Total'])
+    for v in req.daily_input.volumes: vol.append([v.finger,v.aisle,v.sd_volume,v.nd_volume,v.total_volume])
+    wb.save(path); return filename
 def parse_employee_workbook(file_path: Path) -> list[Employee]:
-    workbook = load_workbook(file_path)
-    sheet = workbook.active
-    headers = [str(cell.value).strip().lower() if cell.value else "" for cell in next(sheet.iter_rows(min_row=1, max_row=1))]
-    employees: list[Employee] = []
-    for row_index, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=1):
-        values = dict(zip(headers, row))
-        name = values.get("name") or values.get("mitarbeiter") or values.get("employee")
-        if not name:
-            continue
-        raw_skills = values.get("skills") or values.get("skill") or ""
-        skills = [skill.strip() for skill in str(raw_skills).split(",") if skill.strip()]
-        raw_present = str(values.get("present", "true")).lower()
-        present = raw_present not in {"false", "0", "no", "nein"}
-        employees.append(Employee(id=f"emp-{row_index}", name=str(name), skills=skills, present=present))
-    return employees
+    wb=load_workbook(file_path); sh=wb.active; headers=[str(c.value).strip().lower() if c.value else '' for c in next(sh.iter_rows(min_row=1,max_row=1))]; out=[]
+    for idx,row in enumerate(sh.iter_rows(min_row=2, values_only=True),1):
+        vals=dict(zip(headers,row)); eid=str(vals.get('employee_id') or vals.get('id') or f'upload-{idx}'); name=str(vals.get('name') or vals.get('employee') or '')
+        if name: out.append(Employee(employee_id=eid,name=name,badge_id=str(vals.get('badge_id') or ''),user_id=str(vals.get('user_id') or ''),skills=[s.strip() for s in str(vals.get('skills') or '').split(',') if s.strip()]))
+    return out

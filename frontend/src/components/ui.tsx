@@ -1,6 +1,6 @@
 import { ButtonHTMLAttributes, HTMLAttributes, InputHTMLAttributes, TextareaHTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
-export function Card(props: HTMLAttributes<HTMLDivElement>) { return <div {...props} className={cn('rounded-2xl border bg-white p-6 shadow-sm', props.className)} />; }
-export function Button(props: ButtonHTMLAttributes<HTMLButtonElement>) { return <button {...props} className={cn('rounded-xl bg-brand px-4 py-2 font-semibold text-white hover:bg-blue-700 disabled:opacity-50', props.className)} />; }
-export function Input(props: InputHTMLAttributes<HTMLInputElement>) { return <input {...props} className={cn('w-full rounded-xl border px-3 py-2', props.className)} />; }
-export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) { return <textarea {...props} className={cn('w-full rounded-xl border px-3 py-2 font-mono text-sm', props.className)} />; }
+export function Card(props: HTMLAttributes<HTMLDivElement>) { return <div {...props} className={cn('rounded-2xl border border-slate-800 bg-slate-900/80 p-6 shadow-xl shadow-black/20', props.className)} />; }
+export function Button(props: ButtonHTMLAttributes<HTMLButtonElement>) { return <button {...props} className={cn('rounded-xl bg-brand px-4 py-2 font-semibold text-slate-950 transition hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50', props.className)} />; }
+export function Input(props: InputHTMLAttributes<HTMLInputElement>) { return <input {...props} className={cn('w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-brand focus:ring-2 focus:ring-brand/25 disabled:opacity-60', props.className)} />; }
+export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) { return <textarea {...props} className={cn('w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 font-mono text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-brand focus:ring-2 focus:ring-brand/25', props.className)} />; }

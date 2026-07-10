@@ -47,10 +47,11 @@ class VolumeParseResponse(BaseModel):
 
 class OperationalRate(BaseModel):
     key: str
-    name: str
+    label: str
     default_value: float
     current_value: float
     unit: str = ''
+    step: float | None = None
 
 class ValidationIssue(BaseModel):
     severity: Literal['error','warning','info','success']

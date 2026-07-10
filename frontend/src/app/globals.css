@@ -1,4 +1,5 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-body { background: #f8fafc; color: #0f172a; }
+:root { color-scheme: dark; }
+body { background: #020617; color: #e5e7eb; }

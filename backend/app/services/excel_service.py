@@ -1,18 +1,22 @@
 from pathlib import Path
 from uuid import uuid4
+from urllib.parse import quote
 from openpyxl import Workbook, load_workbook
 from app.models import Employee, FinalizationRequest
 OUTPUT_DIR = Path(__file__).resolve().parents[2] / 'outputs'; OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 def export_finalization(req: FinalizationRequest) -> str:
-    filename=f"allocation_{req.daily_input.shift_date}_{uuid4().hex[:8]}.xlsx"; path=OUTPUT_DIR/filename
-    wb=Workbook(); ws=wb.active; ws.title='Final Allocation'
+    safe_date=quote(req.daily_input.shift_date.replace('/','-'), safe='')
+    filename=f"allocation_{safe_date}_{uuid4().hex[:8]}.xlsx"; path=OUTPUT_DIR/filename
+    wb=Workbook(); ws=wb.active; ws.title='Finale Allocation'
     ws.append(['Schichtdatum',req.daily_input.shift_date]); ws.append(['Status',req.allocation_result.run_status]); ws.append([])
     ws.append(['Employee ID','Badge ID','Name','User ID','Rolle','Engine Cluster','FCLM Cluster','Finger','Primary Aisles','Primary Volume','Load %','Support Target','Support Aisles','Internal Note','Status'])
     for a in req.allocation_result.assignments: ws.append([a.employee_id,a.badge_id,a.name,a.user_id,a.role,a.engine_cluster,a.fclm_cluster,a.finger,', '.join(a.primary_aisles),a.primary_volume,a.load_percent,a.support_target,', '.join(a.support_aisles),a.internal_note,a.status])
-    rp=wb.create_sheet('Role Plan'); rp.append(['Engine Cluster','Suggested','Current','Min','Max','Mandatory','Editable','Type','Available Skilled','Warnings'])
-    for i in req.role_plan.items: rp.append([i.engine_cluster,i.suggested_count,i.current_count,i.minimum_count,i.maximum_count,i.mandatory,str(i.editable),i.type,i.available_skilled_employees,', '.join(i.warnings)])
-    vol=wb.create_sheet('Volumes'); vol.append(['Finger','Aisle','SD Volume','ND Volume','Total'])
+    rp=wb.create_sheet('Rollenplan'); rp.append(['Engine Cluster','Vorgeschlagen','Aktuell','Min','Max','Pflichtrolle','Typ','Verfügbare Skills','Ø Auslastung','Warnungen'])
+    for i in req.role_plan.items: rp.append([i.engine_cluster,i.suggested_count,i.current_count,i.minimum_count,i.maximum_count,i.mandatory,i.type,i.available_skilled_employees,i.average_utilization_percent,', '.join(i.warnings)])
+    vol=wb.create_sheet('Volumendaten'); vol.append(['Finger','Aisle','SD Volume','ND Volume','Total'])
     for v in req.daily_input.volumes: vol.append([v.finger,v.aisle,v.sd_volume,v.nd_volume,v.total_volume])
+    inputs=wb.create_sheet('Inputs'); inputs.append(['Parameter','Wert','Einheit'])
+    for r in req.daily_input.rates: inputs.append([r.label,r.current_value,r.unit])
     wb.save(path); return filename
 def parse_employee_workbook(file_path: Path) -> list[Employee]:
     wb=load_workbook(file_path); sh=wb.active; headers=[str(c.value).strip().lower() if c.value else '' for c in next(sh.iter_rows(min_row=1,max_row=1))]; out=[]

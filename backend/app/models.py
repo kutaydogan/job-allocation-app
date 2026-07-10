@@ -82,6 +82,7 @@ class RolePlanItem(BaseModel):
     type: str
     available_skilled_employees: int
     warnings: list[str] = Field(default_factory=list)
+    average_utilization_percent: float | None = None
 
 class RolePlan(BaseModel):
     target_positions: int

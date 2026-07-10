@@ -4,7 +4,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from fastapi import APIRouter, File, UploadFile, HTTPException
 from fastapi.responses import FileResponse
-from app.engine.dummy_engine import calculate_role_plan, final_allocation, validate_role_plan
+from app.engine.dummy_engine import calculate_role_plan, final_allocation, validate_role_plan, get_additional_role_catalog
 from app.models import *
 from app.services.database import list_allocations, save_finalization
 from app.parsers.aisle_parser import merge_sd_nd_volumes, parse_aisle_volume_input
@@ -16,9 +16,9 @@ RATES=[
     OperationalRate(key='stow_rate_bc',label='Stow Rate B/C',default_value=120,current_value=120,unit='pph'),
     OperationalRate(key='adta_stow_rate',label='ADTA Stow Rate',default_value=135,current_value=135,unit='pph'),
     OperationalRate(key='pick_rate',label='Pick Rate',default_value=95,current_value=95,unit='pph'),
-    OperationalRate(key='induct_rate',label='Induct Rate',default_value=1100,current_value=1100,unit='pph'),
-    OperationalRate(key='asl_rate',label='ASL Rate',default_value=850,current_value=850,unit='pph'),
-    OperationalRate(key='asml_rate',label='ASML Rate',default_value=900,current_value=900,unit='pph'),
+    OperationalRate(key='asl_induct_rate',label='ASL Induct Rate',default_value=850,current_value=850,unit='pph'),
+    OperationalRate(key='asml_induct_rate_2p',label='ASML Induct Rate - 2 Personen',default_value=900,current_value=900,unit='pph'),
+    OperationalRate(key='asml_induct_rate_3p',label='ASML Induct Rate - 3 Personen',default_value=1250,current_value=1250,unit='pph'),
     OperationalRate(key='stow_belt_time',label='Stow Belt Time',default_value=7.5,current_value=7.5,unit='hours',step=0.25),
     OperationalRate(key='induct_belt_time',label='Induct Belt Time',default_value=7.5,current_value=7.5,unit='hours',step=0.25),
     OperationalRate(key='new_hire_days',label='New Hire Days',default_value=14,current_value=14,unit='days'),
@@ -80,6 +80,8 @@ def pre(inp: DailyInput):
         if r.current_value <= 0: issues.append(ValidationIssue(severity='error',message=f'{r.label} muss positiv sein',field=r.key))
     return ValidationResult(is_valid=not any(i.severity=='error' for i in issues),error_count=sum(i.severity=='error' for i in issues),warning_count=sum(i.severity=='warning' for i in issues),issues=issues)
 
+@router.get('/role-plan/catalog')
+def role_catalog(): return get_additional_role_catalog()
 @router.post('/role-plan/calculate', response_model=RolePlan)
 def role_calc(inp: DailyInput): return calculate_role_plan(inp)
 @router.post('/role-plan/validate', response_model=RolePlanValidation)
@@ -88,14 +90,21 @@ def role_val(plan: RolePlan): return validate_role_plan(plan)
 def alloc(payload: dict): return final_allocation(DailyInput(**payload['daily_input']), RolePlan(**payload['role_plan']))
 @router.post('/allocation/finalize', response_model=FinalizationResult)
 def finalize(req: FinalizationRequest):
-    filename=export_finalization(req); run_id=save_finalization(req,filename)
+    validation = validate_role_plan(req.role_plan)
+    if not validation.is_valid:
+        raise HTTPException(400, '; '.join(i.message for i in validation.issues))
+    filename=export_finalization(req)
+    path=OUTPUT_DIR / filename
+    if not path.exists():
+        raise HTTPException(500,'Excel-Export konnte nicht erzeugt werden')
+    run_id=save_finalization(req,filename)
     return FinalizationResult(run_id=run_id,status='finalized',export_filename=filename,message='Allocation erfolgreich finalisiert')
 @router.get('/allocations', response_model=list[AllocationHistoryEntry])
 def history(): return list_allocations()
 @router.get('/exports/{filename}')
 def download_export(filename: str):
     path=OUTPUT_DIR / filename
-    if not path.exists(): raise HTTPException(404,'Export nicht gefunden')
+    if not path.exists(): raise HTTPException(404,f'Exportdatei {filename} wurde nicht gefunden')
     return FileResponse(path, filename=filename, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 @router.post('/employees/upload')
 async def upload_employees(file: UploadFile = File(...)):
